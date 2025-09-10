@@ -43,27 +43,7 @@ export default function GeofenceScreen() {
           return;
         }
 
-        try {
-          const initialLocation = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.High,
-            timeout: 15000,
-          });
-          console.log("[Geofence] initial location:", initialLocation.coords);
-          if (mountedRef.current) {
-            setLocation(initialLocation.coords);
-          }
-          checkLocationAndFetchGeofences(initialLocation.coords).catch((e) =>
-            console.error("[Geofence] initial check error:", e)
-          );
-        } catch (err) {
-          console.warn(
-            "[Geofence] getCurrentPositionAsync failed:",
-            err?.message || err
-          );
-        } finally {
-          if (mountedRef.current) setIsLoading(false);
-        }
-
+        // Start watching position immediately
         const sub = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.High,
@@ -73,7 +53,11 @@ export default function GeofenceScreen() {
           (loc) => {
             if (!mountedRef.current) return;
             console.log("[Geofence] watch pos:", loc.coords);
-            setLocation(loc.coords);
+            setLocation((prev) => {
+              // Only set isLoading to false on first location
+              if (isLoading) setIsLoading(false);
+              return loc.coords;
+            });
             checkLocationAndFetchGeofences(loc.coords).catch((e) =>
               console.error("[Geofence] watch check error:", e)
             );
@@ -225,62 +209,85 @@ export default function GeofenceScreen() {
     }
   };
 
-  // UI
+  // Default region (center of India)
+  const defaultRegion = {
+    latitude: 22.9734,
+    longitude: 78.6569,
+    latitudeDelta: 10,
+    longitudeDelta: 10,
+  };
+
   return (
     <View style={styles.container}>
-      {!isLoading && location ? (
-        <>
-          <MapView
-            style={styles.map}
-            initialRegion={{
-              latitude: location.latitude,
-              longitude: location.longitude,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            }}
-            showsUserLocation={true}
-            showsMyLocationButton={true}
-            loadingEnabled={true}
-          >
-            <Marker
-              coordinate={{
+      <MapView
+        style={styles.map}
+        initialRegion={
+          location
+            ? {
                 latitude: location.latitude,
                 longitude: location.longitude,
-              }}
-              title="Your Location"
-              description="Current position"
-              pinColor="blue"
-            />
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+              }
+            : defaultRegion
+        }
+        region={
+          location
+            ? {
+                latitude: location.latitude,
+                longitude: location.longitude,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+              }
+            : undefined
+        }
+        showsUserLocation={true}
+        showsMyLocationButton={true}
+        loadingEnabled={true}
+      >
+        {location && (
+          <Marker
+            coordinate={{
+              latitude: location.latitude,
+              longitude: location.longitude,
+            }}
+            title="Your Location"
+            description="Current position"
+            pinColor="blue"
+          />
+        )}
+        {renderGeofences()}
+      </MapView>
 
-            {renderGeofences()}
-          </MapView>
-
-          <View style={styles.infoPanel}>
-            <Text style={styles.coordinatesText}>
-              Lat: {location.latitude.toFixed(5)}, Lon:{" "}
-              {location.longitude.toFixed(5)}
-            </Text>
-            <Text style={styles.zoneStatusText}>
-              {insideZone ? "✅ Inside Safe Zone" : "❌ Outside Zone"}
-            </Text>
-            <Text style={styles.geofenceCount}>
-              Nearby geofences: {geofences.length}
-            </Text>
-            {insideZone && (
-              <View style={styles.buttonContainer}>
-                <Button title="Upload Photo" onPress={handleUploadPhoto} />
-              </View>
-            )}
-          </View>
-        </>
-      ) : (
+      {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#0066cc" />
           <Text style={styles.loadingText}>
             {error ? `Error: ${error}` : "Fetching location..."}
           </Text>
         </View>
-      )}
+      ) : location ? (
+        <View style={styles.infoPanel}>
+          <Text style={styles.coordinatesText}>
+            Lat: {location.latitude.toFixed(5)}, Lon: {location.longitude.toFixed(5)}
+          </Text>
+          <Text style={styles.zoneStatusText}>
+            {insideZone ? "✅ Inside Safe Zone" : "❌ Outside Zone"}
+          </Text>
+          <Text style={styles.geofenceCount}>
+            Nearby geofences: {geofences.length}
+          </Text>
+          {insideZone && (
+            <View style={styles.buttonContainer}>
+              <Button title="Upload Photo" onPress={handleUploadPhoto} />
+            </View>
+          )}
+        </View>
+      ) : error ? (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Error: {error}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
