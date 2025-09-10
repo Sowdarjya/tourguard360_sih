@@ -3,12 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
-  Button,
   Alert,
   StyleSheet,
   ActivityIndicator,
-  Platform,
 } from "react-native";
+import { Card, Button, Title, Divider, FAB } from "react-native-paper";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
 import MapView, { Marker, Circle, Polygon } from "react-native-maps";
@@ -259,35 +258,46 @@ export default function GeofenceScreen() {
         {renderGeofences()}
       </MapView>
 
-      {isLoading ? (
+      {isLoading && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#0066cc" />
           <Text style={styles.loadingText}>
             {error ? `Error: ${error}` : "Fetching location..."}
           </Text>
         </View>
-      ) : location ? (
-        <View style={styles.infoPanel}>
-          <Text style={styles.coordinatesText}>
-            Lat: {location.latitude.toFixed(5)}, Lon: {location.longitude.toFixed(5)}
-          </Text>
-          <Text style={styles.zoneStatusText}>
-            {insideZone ? "✅ Inside Safe Zone" : "❌ Outside Zone"}
-          </Text>
-          <Text style={styles.geofenceCount}>
-            Nearby geofences: {geofences.length}
-          </Text>
-          {insideZone && (
-            <View style={styles.buttonContainer}>
-              <Button title="Upload Photo" onPress={handleUploadPhoto} />
-            </View>
-          )}
-        </View>
-      ) : error ? (
+      )}
+      {!isLoading && location && (
+        <Card style={styles.infoPanel} elevation={6}>
+          <Card.Content>
+            <Title style={styles.panelTitle}>Geofence Status</Title>
+            <Divider style={{ marginBottom: 8 }} />
+            <Text style={styles.coordinatesText}>
+              Lat: {location.latitude.toFixed(5)}, Lon: {location.longitude.toFixed(5)}
+            </Text>
+            <Text
+              style={[styles.zoneStatusText, insideZone ? styles.inside : styles.outside]}
+            >
+              {insideZone ? "Inside Safe Zone" : "Outside Zone"}
+            </Text>
+            <Text style={styles.geofenceCount}>
+              Nearby geofences: {geofences.length}
+            </Text>
+          </Card.Content>
+        </Card>
+      )}
+      {!isLoading && location && insideZone && (
+        <FAB
+          style={styles.fab}
+          icon="camera"
+          label="Upload Photo"
+          onPress={handleUploadPhoto}
+        />
+      )}
+      {!isLoading && error && (
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Error: {error}</Text>
         </View>
-      ) : null}
+      )}
     </View>
   );
 }
@@ -300,19 +310,27 @@ const styles = StyleSheet.create({
     bottom: 50,
     left: 20,
     right: 20,
-    backgroundColor: "white",
-    padding: 15,
-    borderRadius: 10,
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    padding: 0,
+    borderRadius: 12,
+    elevation: 6,
   },
-  coordinatesText: { fontSize: 12, color: "#666", marginBottom: 5 },
-  zoneStatusText: { fontSize: 16, fontWeight: "bold", marginBottom: 5 },
-  geofenceCount: { fontSize: 12, color: "#666", marginBottom: 10 },
-  buttonContainer: { marginTop: 10 },
+  panelTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 4,
+    textAlign: "center",
+  },
+  coordinatesText: { fontSize: 12, color: "#666", marginBottom: 5, textAlign: "center" },
+  zoneStatusText: { fontSize: 16, fontWeight: "bold", marginBottom: 5, textAlign: "center" },
+  inside: { color: "#2e7d32" },
+  outside: { color: "#c62828" },
+  geofenceCount: { fontSize: 12, color: "#666", marginBottom: 10, textAlign: "center" },
+  fab: {
+    position: "absolute",
+    right: 30,
+    bottom: 120,
+    backgroundColor: "#1976d2",
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
