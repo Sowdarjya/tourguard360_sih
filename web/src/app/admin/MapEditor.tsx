@@ -125,7 +125,7 @@ export default function MapEditor({ token }: { token: string }) {
 
   return (
     <div className="flex flex-col items-center">
-      <div ref={mapContainer} className="w-[600px] h-[400px] mb-4 rounded shadow" />
+      <div ref={mapContainer} className="w-[900px] h-[600px] mb-4 rounded shadow" />
       <button
         className={`px-4 py-2 rounded ${drawing ? "bg-red-600" : "bg-blue-600"} text-white mb-2`}
         onClick={() => setDrawing(d => !d)}

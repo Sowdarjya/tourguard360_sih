@@ -57,9 +57,7 @@ export default function TourGuard360Page() {
         {/* Live Demo Button */}
         <div className="text-center mb-16">
           <a
-            href="http://localhost:3500"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="http://localhost:3500/admin"
             className="bg-green-500 text-white font-bold py-3 px-8 rounded-full hover:bg-green-600 transition-all duration-300 text-lg shadow-lg hover:shadow-green-500/50"
           >
             Go to Live Demo
