@@ -58,9 +58,9 @@ export default function TourGuard360Page() {
         <div className="text-center mb-16">
           <a
             href="http://localhost:3500/admin"
-            className="bg-green-500 text-white font-bold py-3 px-8 rounded-full hover:bg-green-600 transition-all duration-300 text-lg shadow-lg hover:shadow-green-500/50"
+            className="bg-cyan-800 text-white font-bold py-3 px-8 rounded-full hover:bg-blue-600 transition-all duration-300 text-lg shadow-lg hover:shadow-green-500/50"
           >
-            Go to Live Demo
+            Go to Admin Panel
           </a>
         </div>
 
