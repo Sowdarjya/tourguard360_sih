@@ -62,7 +62,7 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
+    <div className="min-h-screen flex flex-col items-center justify-center text-black">
       {!token ? (
         <div className="bg-white p-8 rounded shadow w-full max-w-sm">
           <h2 className="text-2xl font-bold mb-4">{registerMode ? "Admin Registration" : "Admin Login"}</h2>
