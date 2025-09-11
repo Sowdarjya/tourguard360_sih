@@ -3,15 +3,17 @@ import pool from "../db/db.js";
 import jwt from "jsonwebtoken";
 
 export const registerUser = async (req, res) => {
-  const { name, email, password } = req.body || {};
+  const { name, email, password, role } = req.body || {};
   if (!name || !email || !password)
     return res.status(400).json({ error: "Missing fields" });
 
   try {
     const hashed = await bcrypt.hash(password, 10);
+    // Default role to 'user' if not provided
+    const userRole = role === "admin" ? "admin" : "user";
     const result = await pool.query(
-      "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email, role",
-      [name, email.toLowerCase(), hashed]
+      "INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role",
+      [name, email.toLowerCase(), hashed, userRole]
     );
     const user = result.rows[0];
     res.json({ user });

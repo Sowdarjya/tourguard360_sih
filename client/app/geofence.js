@@ -106,7 +106,7 @@ export default function GeofenceScreen() {
 
     try {
       const nearby = await api.get("/geofence/nearby", {
-        params: { lat: coords.latitude, lon: coords.longitude, radius: 2000 },
+        params: { lat: coords.latitude, lon: coords.longitude, radius: 5000 },
       });
       console.log("[Geofence] nearby geofences:", nearby.data?.length ?? 0);
       if (mountedRef.current) setGeofences(nearby.data || []);
