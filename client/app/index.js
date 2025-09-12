@@ -1,4 +1,3 @@
-
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import { Card, Title, Text, Button, Divider } from "react-native-paper";
@@ -55,6 +54,8 @@ export default function HomeScreen() {
           <Title style={styles.title}>Welcome to TourGuard360</Title>
           <Divider style={{ marginBottom: 16 }} />
           <Text style={styles.subtitle}>Your safety companion for travel</Text>
+
+          {/* First row of buttons */}
           <View style={styles.buttonRow}>
             <Button
               mode="contained"
@@ -64,6 +65,29 @@ export default function HomeScreen() {
               contentStyle={{ paddingVertical: 6 }}
             >
               Geofencing
+            </Button>
+            <Button
+              mode="contained"
+              icon="account-group"
+              onPress={() => router.push("/family")}
+              style={styles.button}
+              contentStyle={{ paddingVertical: 6 }}
+            >
+              Family
+            </Button>
+          </View>
+
+          {/* Second row of buttons */}
+          <View style={styles.buttonRow}>
+            <Button
+              mode="contained"
+              icon="alert-circle"
+              onPress={() => router.push("/geofence")} // SOS is on Geofence screen
+              style={[styles.button, { backgroundColor: "#d32f2f" }]}
+              contentStyle={{ paddingVertical: 6 }}
+              labelStyle={{ color: "white" }}
+            >
+              SOS
             </Button>
             <Button
               mode="outlined"

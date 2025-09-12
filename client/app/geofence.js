@@ -1,13 +1,6 @@
-// GeofenceScreen.js
 import { useEffect, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  Alert,
-  StyleSheet,
-  ActivityIndicator,
-} from "react-native";
-import { Card, Button, Title, Divider, FAB } from "react-native-paper";
+import { View, Text, Alert, StyleSheet, ActivityIndicator } from "react-native";
+import { Card, Title, Divider, FAB } from "react-native-paper";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
 import MapView, { Marker, Circle, Polygon } from "react-native-maps";
@@ -28,10 +21,7 @@ export default function GeofenceScreen() {
 
     const init = async () => {
       try {
-        console.log("[Geofence] init");
         const { status } = await Location.requestForegroundPermissionsAsync();
-        console.log("[Geofence] permission status:", status);
-
         if (status !== "granted") {
           setError("Location permission denied");
           Alert.alert(
@@ -42,7 +32,7 @@ export default function GeofenceScreen() {
           return;
         }
 
-        // Start watching position immediately
+        // Watch position
         const sub = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.High,
@@ -51,9 +41,7 @@ export default function GeofenceScreen() {
           },
           (loc) => {
             if (!mountedRef.current) return;
-            console.log("[Geofence] watch pos:", loc.coords);
             setLocation((prev) => {
-              // Only set isLoading to false on first location
               if (isLoading) setIsLoading(false);
               return loc.coords;
             });
@@ -64,7 +52,6 @@ export default function GeofenceScreen() {
         );
 
         subscriptionRef.current = sub;
-        console.log("[Geofence] watching started");
       } catch (err) {
         console.error("[Geofence] initialization error:", err);
         if (mountedRef.current) {
@@ -82,50 +69,38 @@ export default function GeofenceScreen() {
         subscriptionRef.current.remove();
         subscriptionRef.current = null;
       }
-      console.log("[Geofence] cleanup");
     };
   }, []);
 
   const checkLocationAndFetchGeofences = async (coords) => {
     if (!coords) return;
     try {
-      console.log("[Geofence] checking location", coords);
       const res = await api.post("/geofence/check-location", {
         latitude: coords.latitude,
         longitude: coords.longitude,
       });
-      console.log("[Geofence] check-location response:", res.data);
       if (mountedRef.current) setInsideZone(Boolean(res.data.inside));
     } catch (err) {
-      console.error(
-        "[Geofence] check-location API error:",
-        err?.response?.data || err.message || err
-      );
-      // don't throw — swallow and continue
+      console.error("[Geofence] check-location API error:", err.message);
     }
 
     try {
       const nearby = await api.get("/geofence/nearby", {
         params: { lat: coords.latitude, lon: coords.longitude, radius: 5000 },
       });
-      console.log("[Geofence] nearby geofences:", nearby.data?.length ?? 0);
       if (mountedRef.current) setGeofences(nearby.data || []);
     } catch (err) {
-      console.error(
-        "[Geofence] nearby API error:",
-        err?.response?.data || err.message || err
-      );
+      console.error("[Geofence] nearby API error:", err.message);
       if (mountedRef.current) setGeofences([]);
     }
   };
 
-  // Render polygons/circles returned by backend (GeoJSON in g.geometry)
+  // Render geofences
   const renderGeofences = () => {
     return geofences.map((g) => {
       try {
         const geom = JSON.parse(g.geometry);
         if (geom.type === "Polygon") {
-          // GeoJSON polygon coordinates: [ [ [lon, lat], ... ] ]
           return (
             <Polygon
               key={g.id}
@@ -139,7 +114,6 @@ export default function GeofenceScreen() {
             />
           );
         } else if (geom.type === "Point") {
-          // Treat point as a circle fence (radius 100m default)
           return (
             <Circle
               key={g.id}
@@ -152,26 +126,20 @@ export default function GeofenceScreen() {
               fillColor="rgba(255,0,0,0.25)"
             />
           );
-        } else {
-          // unsupported geometry
-          return null;
         }
-      } catch (parseError) {
-        console.error("Error parsing geofence geometry:", parseError);
-        return null;
+      } catch (err) {
+        console.error("Error parsing geofence geometry:", err);
       }
+      return null;
     });
   };
 
-  // Camera upload
+  // Upload photo if inside a zone
   const handleUploadPhoto = async () => {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert(
-          "Permission required",
-          "Camera access is needed to take photos."
-        );
+        Alert.alert("Permission required", "Camera access is needed.");
         return;
       }
 
@@ -181,7 +149,7 @@ export default function GeofenceScreen() {
         aspect: [4, 3],
       });
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
+      if (!result.canceled && result.assets?.length > 0) {
         const uri = result.assets[0].uri;
         const formData = new FormData();
         formData.append("photo", {
@@ -190,9 +158,9 @@ export default function GeofenceScreen() {
           type: "image/jpeg",
         });
 
-        // optional: include nearest geofence id if available
-        if (geofences.length > 0)
+        if (geofences.length > 0) {
           formData.append("geofenceId", String(geofences[0].id));
+        }
 
         await api.post("/photos/upload", formData, {
           headers: { "Content-Type": "multipart/form-data" },
@@ -200,15 +168,28 @@ export default function GeofenceScreen() {
         Alert.alert("Success", "Photo uploaded successfully!");
       }
     } catch (err) {
-      console.error(
-        "Photo upload error:",
-        err?.response?.data || err.message || err
-      );
-      Alert.alert("Error", "Failed to upload photo. Please try again.");
+      console.error("Photo upload error:", err.message);
+      Alert.alert("Error", "Failed to upload photo.");
     }
   };
 
-  // Default region (center of India)
+  // SOS alert
+  const handleSOS = async () => {
+    if (!location) return;
+    try {
+      const res = await api.post("/sos/trigger", {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        message: "I am in danger! Please help me.",
+      });
+      Alert.alert("SOS Sent", "Family & authorities have been notified.");
+      console.log("SOS Response:", res.data);
+    } catch (err) {
+      console.error("SOS error:", err.message);
+      Alert.alert("Error", "Failed to send SOS alert.");
+    }
+  };
+
   const defaultRegion = {
     latitude: 22.9734,
     longitude: 78.6569,
@@ -240,9 +221,9 @@ export default function GeofenceScreen() {
               }
             : undefined
         }
-        showsUserLocation={true}
-        showsMyLocationButton={true}
-        loadingEnabled={true}
+        showsUserLocation
+        showsMyLocationButton
+        loadingEnabled
       >
         {location && (
           <Marker
@@ -251,7 +232,6 @@ export default function GeofenceScreen() {
               longitude: location.longitude,
             }}
             title="Your Location"
-            description="Current position"
             pinColor="blue"
           />
         )}
@@ -266,16 +246,21 @@ export default function GeofenceScreen() {
           </Text>
         </View>
       )}
+
       {!isLoading && location && (
         <Card style={styles.infoPanel} elevation={6}>
           <Card.Content>
             <Title style={styles.panelTitle}>Geofence Status</Title>
             <Divider style={{ marginBottom: 8 }} />
             <Text style={styles.coordinatesText}>
-              Lat: {location.latitude.toFixed(5)}, Lon: {location.longitude.toFixed(5)}
+              Lat: {location.latitude.toFixed(5)}, Lon:{" "}
+              {location.longitude.toFixed(5)}
             </Text>
             <Text
-              style={[styles.zoneStatusText, insideZone ? styles.inside : styles.outside]}
+              style={[
+                styles.zoneStatusText,
+                insideZone ? styles.inside : styles.outside,
+              ]}
             >
               {insideZone ? "Inside Safe Zone" : "Outside Zone"}
             </Text>
@@ -285,18 +270,24 @@ export default function GeofenceScreen() {
           </Card.Content>
         </Card>
       )}
+
       {!isLoading && location && insideZone && (
         <FAB
-          style={styles.fab}
+          style={styles.fabPhoto}
           icon="camera"
           label="Upload Photo"
           onPress={handleUploadPhoto}
         />
       )}
-      {!isLoading && error && (
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Error: {error}</Text>
-        </View>
+
+      {!isLoading && location && (
+        <FAB
+          style={styles.fabSOS}
+          icon="alert"
+          label="SOS"
+          color="white"
+          onPress={handleSOS}
+        />
       )}
     </View>
   );
@@ -320,16 +311,37 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     textAlign: "center",
   },
-  coordinatesText: { fontSize: 12, color: "#666", marginBottom: 5, textAlign: "center" },
-  zoneStatusText: { fontSize: 16, fontWeight: "bold", marginBottom: 5, textAlign: "center" },
+  coordinatesText: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 5,
+    textAlign: "center",
+  },
+  zoneStatusText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 5,
+    textAlign: "center",
+  },
   inside: { color: "#2e7d32" },
   outside: { color: "#c62828" },
-  geofenceCount: { fontSize: 12, color: "#666", marginBottom: 10, textAlign: "center" },
-  fab: {
+  geofenceCount: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  fabPhoto: {
     position: "absolute",
     right: 30,
     bottom: 120,
     backgroundColor: "#1976d2",
+  },
+  fabSOS: {
+    position: "absolute",
+    right: 30,
+    bottom: 40,
+    backgroundColor: "#d32f2f",
   },
   loadingContainer: {
     flex: 1,

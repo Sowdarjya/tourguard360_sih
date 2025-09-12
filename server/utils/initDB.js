@@ -21,6 +21,7 @@ export async function initializeDB() {
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
         geom GEOGRAPHY(POLYGON, 4326),
+        authority_contact JSONB, 
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
@@ -35,6 +36,30 @@ export async function initializeDB() {
       );
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS family_members (
+        id SERIAL PRIMARY KEY,
+        user_id INT REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        phone TEXT,
+        email TEXT,
+        fcm_token TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS sos_alerts (
+        id SERIAL PRIMARY KEY,
+        user_id INT REFERENCES users(id),
+        latitude DOUBLE PRECISION,
+        longitude DOUBLE PRECISION,
+        message TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        resolved BOOLEAN DEFAULT false
+      );
+    `);
+
     console.log("✅ Tables ensured");
 
     const { rows } = await pool.query(
@@ -42,10 +67,16 @@ export async function initializeDB() {
     );
     if (rows[0].c === 0) {
       await pool.query(
-        `INSERT INTO geofences (name, geom) VALUES ($1, ST_GeogFromText($2))`,
+        `INSERT INTO geofences (name, geom, authority_contact)
+         VALUES ($1, ST_GeogFromText($2), $3)`,
         [
           "Example Safe Zone",
           "POLYGON((91.736 26.144, 91.738 26.144, 91.738 26.146, 91.736 26.146, 91.736 26.144))",
+          JSON.stringify({
+            authority: "Local Police Station",
+            phone: "+911234567890",
+            email: "authority@example.com",
+          }),
         ]
       );
       console.log("✅ Seeded example geofence");
