@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, Alert, StyleSheet, ActivityIndicator } from "react-native";
-import { Card, Title, Divider, FAB } from "react-native-paper";
+import { Card, Title, Divider, FAB, Chip, Button } from "react-native-paper";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
 import MapView, { Marker, Circle, Polygon } from "react-native-maps";
+import { LinearGradient } from "expo-linear-gradient";
 import api from "../utils/api";
 
 export default function GeofenceScreen() {
@@ -12,6 +13,8 @@ export default function GeofenceScreen() {
   const [geofences, setGeofences] = useState([]);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [sosLoading, setSosLoading] = useState(false);
 
   const subscriptionRef = useRef(null);
   const mountedRef = useRef(true);
@@ -25,19 +28,26 @@ export default function GeofenceScreen() {
         if (status !== "granted") {
           setError("Location permission denied");
           Alert.alert(
-            "Permission required",
-            "Enable location access to use this feature."
+            "Permission Required",
+            "Please enable location access in your device settings to use geofencing features.",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Settings",
+                onPress: () => Location.enableNetworkProviderAsync(),
+              },
+            ]
           );
           setIsLoading(false);
           return;
         }
 
-        // Watch position
+        // Watch position with improved accuracy
         const sub = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.High,
-            timeInterval: 5000,
-            distanceInterval: 10,
+            accuracy: Location.Accuracy.BestForNavigation,
+            timeInterval: 3000,
+            distanceInterval: 5,
           },
           (loc) => {
             if (!mountedRef.current) return;
@@ -55,7 +65,7 @@ export default function GeofenceScreen() {
       } catch (err) {
         console.error("[Geofence] initialization error:", err);
         if (mountedRef.current) {
-          setError("Failed to initialize location");
+          setError("Failed to initialize location services");
           setIsLoading(false);
         }
       }
@@ -95,11 +105,28 @@ export default function GeofenceScreen() {
     }
   };
 
-  // Render geofences
+  // Render geofences with enhanced styling
   const renderGeofences = () => {
-    return geofences.map((g) => {
+    return geofences.map((g, index) => {
       try {
         const geom = JSON.parse(g.geometry);
+        const colors = [
+          {
+            stroke: "rgba(59, 130, 246, 0.9)",
+            fill: "rgba(59, 130, 246, 0.25)",
+          },
+          {
+            stroke: "rgba(16, 185, 129, 0.9)",
+            fill: "rgba(16, 185, 129, 0.25)",
+          },
+          {
+            stroke: "rgba(245, 158, 11, 0.9)",
+            fill: "rgba(245, 158, 11, 0.25)",
+          },
+          { stroke: "rgba(239, 68, 68, 0.9)", fill: "rgba(239, 68, 68, 0.25)" },
+        ];
+        const colorSet = colors[index % colors.length];
+
         if (geom.type === "Polygon") {
           return (
             <Polygon
@@ -108,9 +135,9 @@ export default function GeofenceScreen() {
                 latitude: lat,
                 longitude: lon,
               }))}
-              strokeColor="rgba(255,0,0,0.9)"
-              fillColor="rgba(255,0,0,0.25)"
-              strokeWidth={2}
+              strokeColor={colorSet.stroke}
+              fillColor={colorSet.fill}
+              strokeWidth={3}
             />
           );
         } else if (geom.type === "Point") {
@@ -121,9 +148,10 @@ export default function GeofenceScreen() {
                 latitude: geom.coordinates[1],
                 longitude: geom.coordinates[0],
               }}
-              radius={100}
-              strokeColor="rgba(255,0,0,0.9)"
-              fillColor="rgba(255,0,0,0.25)"
+              radius={150}
+              strokeColor={colorSet.stroke}
+              fillColor={colorSet.fill}
+              strokeWidth={3}
             />
           );
         }
@@ -134,19 +162,24 @@ export default function GeofenceScreen() {
     });
   };
 
-  // Upload photo if inside a zone
+  // Enhanced photo upload with better UX
   const handleUploadPhoto = async () => {
     try {
+      setPhotoUploading(true);
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Permission required", "Camera access is needed.");
+        Alert.alert(
+          "Camera Permission Required",
+          "Please allow camera access to take safety check-in photos."
+        );
         return;
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        quality: 0.7,
+        quality: 0.8,
         allowsEditing: true,
-        aspect: [4, 3],
+        aspect: [16, 9],
+        exif: true,
       });
 
       if (!result.canceled && result.assets?.length > 0) {
@@ -154,9 +187,14 @@ export default function GeofenceScreen() {
         const formData = new FormData();
         formData.append("photo", {
           uri,
-          name: "checkin.jpg",
+          name: `checkin_${Date.now()}.jpg`,
           type: "image/jpeg",
         });
+
+        if (location) {
+          formData.append("latitude", location.latitude.toString());
+          formData.append("longitude", location.longitude.toString());
+        }
 
         if (geofences.length > 0) {
           formData.append("geofenceId", String(geofences[0].id));
@@ -165,29 +203,73 @@ export default function GeofenceScreen() {
         await api.post("/photos/upload", formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
-        Alert.alert("Success", "Photo uploaded successfully!");
+
+        Alert.alert(
+          "Success",
+          "Safety check-in photo uploaded successfully! Your family has been notified.",
+          [{ text: "OK", style: "default" }]
+        );
       }
     } catch (err) {
       console.error("Photo upload error:", err.message);
-      Alert.alert("Error", "Failed to upload photo.");
+      Alert.alert(
+        "Upload Failed",
+        "Unable to upload photo. Please check your internet connection and try again."
+      );
+    } finally {
+      setPhotoUploading(false);
     }
   };
 
-  // SOS alert
+  // Enhanced SOS with better alerts
   const handleSOS = async () => {
-    if (!location) return;
-    try {
-      const res = await api.post("/sos/trigger", {
-        latitude: location.latitude,
-        longitude: location.longitude,
-        message: "I am in danger! Please help me.",
-      });
-      Alert.alert("SOS Sent", "Family & authorities have been notified.");
-      console.log("SOS Response:", res.data);
-    } catch (err) {
-      console.error("SOS error:", err.message);
-      Alert.alert("Error", "Failed to send SOS alert.");
+    if (!location) {
+      Alert.alert(
+        "Location Error",
+        "Unable to get your current location for SOS."
+      );
+      return;
     }
+
+    Alert.alert(
+      "🚨 Emergency SOS",
+      "This will immediately notify your family members and emergency services of your location. Are you sure you want to continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Send SOS",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setSosLoading(true);
+              const res = await api.post("/sos/trigger", {
+                latitude: location.latitude,
+                longitude: location.longitude,
+                message:
+                  "🚨 EMERGENCY: I need immediate help! This is an automated SOS alert from TourGuard360.",
+                timestamp: new Date().toISOString(),
+              });
+
+              Alert.alert(
+                "SOS Alert Sent",
+                "Emergency services and your family members have been notified of your location. Help is on the way.",
+                [{ text: "OK", style: "default" }]
+              );
+
+              console.log("SOS Response:", res.data);
+            } catch (err) {
+              console.error("SOS error:", err.message);
+              Alert.alert(
+                "SOS Failed",
+                "Unable to send emergency alert. Please call emergency services directly or try again."
+              );
+            } finally {
+              setSosLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const defaultRegion = {
@@ -197,33 +279,28 @@ export default function GeofenceScreen() {
     longitudeDelta: 10,
   };
 
+  const currentRegion = location
+    ? {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        latitudeDelta: 0.008,
+        longitudeDelta: 0.008,
+      }
+    : defaultRegion;
+
   return (
     <View style={styles.container}>
       <MapView
         style={styles.map}
-        initialRegion={
-          location
-            ? {
-                latitude: location.latitude,
-                longitude: location.longitude,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-              }
-            : defaultRegion
-        }
-        region={
-          location
-            ? {
-                latitude: location.latitude,
-                longitude: location.longitude,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-              }
-            : undefined
-        }
-        showsUserLocation
-        showsMyLocationButton
-        loadingEnabled
+        initialRegion={currentRegion}
+        region={location ? currentRegion : undefined}
+        showsUserLocation={true}
+        showsMyLocationButton={false}
+        showsCompass={true}
+        showsScale={true}
+        loadingEnabled={true}
+        mapType="standard"
+        customMapStyle={mapStyle}
       >
         {location && (
           <Marker
@@ -231,123 +308,237 @@ export default function GeofenceScreen() {
               latitude: location.latitude,
               longitude: location.longitude,
             }}
-            title="Your Location"
-            pinColor="blue"
+            title="Your Current Location"
+            description="You are here"
+            pinColor="#3b82f6"
           />
         )}
         {renderGeofences()}
       </MapView>
 
       {isLoading && (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#0066cc" />
-          <Text style={styles.loadingText}>
-            {error ? `Error: ${error}` : "Fetching location..."}
+        <LinearGradient
+          colors={["rgba(248, 250, 252, 0.95)", "rgba(241, 245, 249, 0.95)"]}
+          style={styles.loadingOverlay}
+        >
+          <ActivityIndicator size="large" color="#3b82f6" />
+          <Text style={styles.loadingTitle}>
+            {error ? "Location Error" : "Getting Your Location"}
           </Text>
-        </View>
+          <Text style={styles.loadingSubtitle}>
+            {error ? error : "Setting up geofencing protection..."}
+          </Text>
+          {error && (
+            <Button
+              mode="outlined"
+              onPress={() => {
+                setError(null);
+                setIsLoading(true);
+                // Retry initialization
+              }}
+              style={styles.retryButton}
+            >
+              Try Again
+            </Button>
+          )}
+        </LinearGradient>
       )}
 
       {!isLoading && location && (
-        <Card style={styles.infoPanel} elevation={6}>
-          <Card.Content>
-            <Title style={styles.panelTitle}>Geofence Status</Title>
-            <Divider style={{ marginBottom: 8 }} />
-            <Text style={styles.coordinatesText}>
-              Lat: {location.latitude.toFixed(5)}, Lon:{" "}
-              {location.longitude.toFixed(5)}
-            </Text>
-            <Text
-              style={[
-                styles.zoneStatusText,
-                insideZone ? styles.inside : styles.outside,
-              ]}
-            >
-              {insideZone ? "Inside Safe Zone" : "Outside Zone"}
-            </Text>
-            <Text style={styles.geofenceCount}>
-              Nearby geofences: {geofences.length}
-            </Text>
+        <Card style={styles.statusCard} elevation={8}>
+          <Card.Content style={styles.statusContent}>
+            <View style={styles.statusHeader}>
+              <Title style={styles.statusTitle}>Safety Status</Title>
+              <Chip
+                icon={insideZone ? "shield-check" : "shield-alert"}
+                style={[
+                  styles.statusChip,
+                  insideZone ? styles.safeChip : styles.alertChip,
+                ]}
+                textStyle={[
+                  styles.chipText,
+                  insideZone ? styles.safeText : styles.alertText,
+                ]}
+              >
+                {insideZone ? "SAFE ZONE" : "OUTSIDE ZONE"}
+              </Chip>
+            </View>
+
+            <Divider style={styles.statusDivider} />
+
+            <View style={styles.locationInfo}>
+              <Text style={styles.coordinatesLabel}>Current Location:</Text>
+              <Text style={styles.coordinatesText}>
+                {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+              </Text>
+              <Text style={styles.geofenceCount}>
+                🛡️ {geofences.length} safety zone
+                {geofences.length !== 1 ? "s" : ""} nearby
+              </Text>
+            </View>
           </Card.Content>
         </Card>
       )}
 
+      {/* Action Buttons */}
       {!isLoading && location && insideZone && (
         <FAB
-          style={styles.fabPhoto}
+          style={styles.photoFAB}
           icon="camera"
-          label="Upload Photo"
+          label="Check-in"
           onPress={handleUploadPhoto}
+          loading={photoUploading}
+          disabled={photoUploading}
+          color="#ffffff"
         />
       )}
 
       {!isLoading && location && (
         <FAB
-          style={styles.fabSOS}
+          style={styles.sosFAB}
           icon="alert"
           label="SOS"
-          color="white"
           onPress={handleSOS}
+          loading={sosLoading}
+          disabled={sosLoading}
+          color="#ffffff"
         />
       )}
     </View>
   );
 }
 
+// Custom map style for better visibility
+const mapStyle = [
+  {
+    featureType: "poi",
+    elementType: "labels",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "transit",
+    elementType: "labels",
+    stylers: [{ visibility: "off" }],
+  },
+];
+
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  map: { flex: 1 },
-  infoPanel: {
-    position: "absolute",
-    bottom: 50,
-    left: 20,
-    right: 20,
-    padding: 0,
-    borderRadius: 12,
-    elevation: 6,
-  },
-  panelTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 4,
-    textAlign: "center",
-  },
-  coordinatesText: {
-    fontSize: 12,
-    color: "#666",
-    marginBottom: 5,
-    textAlign: "center",
-  },
-  zoneStatusText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 5,
-    textAlign: "center",
-  },
-  inside: { color: "#2e7d32" },
-  outside: { color: "#c62828" },
-  geofenceCount: {
-    fontSize: 12,
-    color: "#666",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  fabPhoto: {
-    position: "absolute",
-    right: 30,
-    bottom: 120,
-    backgroundColor: "#1976d2",
-  },
-  fabSOS: {
-    position: "absolute",
-    right: 30,
-    bottom: 40,
-    backgroundColor: "#d32f2f",
-  },
-  loadingContainer: {
+  container: {
     flex: 1,
+    backgroundColor: "#f8fafc",
+  },
+  map: {
+    flex: 1,
+  },
+  loadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f5f5f5",
+    paddingHorizontal: 40,
   },
-  loadingText: { marginTop: 10, fontSize: 16, color: "#666" },
+  loadingTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#1e293b",
+    marginTop: 20,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  loadingSubtitle: {
+    fontSize: 16,
+    color: "#64748b",
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  retryButton: {
+    marginTop: 20,
+    borderColor: "#3b82f6",
+  },
+  statusCard: {
+    position: "absolute",
+    bottom: 140,
+    left: 16,
+    right: 16,
+    borderRadius: 16,
+    backgroundColor: "#ffffff",
+  },
+  statusContent: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  statusHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  statusTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#1e293b",
+    marginBottom: 0,
+  },
+  statusChip: {
+    borderWidth: 1,
+  },
+  safeChip: {
+    backgroundColor: "#f0fdf4",
+    borderColor: "#bbf7d0",
+  },
+  alertChip: {
+    backgroundColor: "#fef2f2",
+    borderColor: "#fecaca",
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+  safeText: {
+    color: "#166534",
+  },
+  alertText: {
+    color: "#dc2626",
+  },
+  statusDivider: {
+    backgroundColor: "#e2e8f0",
+    marginBottom: 12,
+  },
+  locationInfo: {
+    alignItems: "center",
+  },
+  coordinatesLabel: {
+    fontSize: 12,
+    color: "#64748b",
+    fontWeight: "500",
+    marginBottom: 4,
+  },
+  coordinatesText: {
+    fontSize: 14,
+    color: "#374151",
+    fontFamily: "monospace",
+    marginBottom: 8,
+  },
+  geofenceCount: {
+    fontSize: 14,
+    color: "#64748b",
+    textAlign: "center",
+  },
+  photoFAB: {
+    position: "absolute",
+    right: 20,
+    bottom: 80,
+    backgroundColor: "#3b82f6",
+    borderRadius: 16,
+  },
+  sosFAB: {
+    position: "absolute",
+    right: 20,
+    bottom: 20,
+    backgroundColor: "#dc2626",
+    borderRadius: 16,
+  },
 });
