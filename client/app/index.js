@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { View, StyleSheet, ScrollView } from "react-native";
 import { Card, Title, Text, Button, Divider, Avatar } from "react-native-paper";
 import { logout } from "../utils/auth";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const styles = StyleSheet.create({
   container: {
@@ -22,6 +23,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     marginBottom: 12,
   },
+  userAvatar: {
+    marginBottom: 12,
+    borderWidth: 3,
+    borderColor: "#ffffff",
+  },
   welcomeText: {
     fontSize: 28,
     fontWeight: "bold",
@@ -35,6 +41,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontWeight: "500",
   },
+  userName: {
+    fontSize: 22,
+    color: "#ffffff",
+    textAlign: "center",
+    fontWeight: "600",
+    marginBottom: 4,
+  },
   content: {
     flex: 1,
     paddingHorizontal: 20,
@@ -45,11 +58,30 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     elevation: 3,
   },
+  userInfoCard: {
+    marginBottom: 20,
+    borderRadius: 16,
+    elevation: 3,
+    backgroundColor: "#f0fdf4",
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+  },
   sectionTitle: {
     fontSize: 20,
     fontWeight: "bold",
     marginBottom: 16,
     color: "#1e293b",
+  },
+  userInfoTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 12,
+    color: "#166534",
+  },
+  userInfoText: {
+    fontSize: 14,
+    color: "#166534",
+    marginBottom: 6,
   },
   buttonGrid: {
     flexDirection: "row",
@@ -102,13 +134,45 @@ const styles = StyleSheet.create({
     marginVertical: 12,
     backgroundColor: "#e2e8f0",
   },
+  verifiedBadge: {
+    backgroundColor: "#16a34a",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: "center",
+    marginTop: 8,
+  },
+  verifiedText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
 });
 
 export default function HomeScreen() {
   const router = useRouter();
+  const [userData, setUserData] = useState(null);
+
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const storedUserData = await AsyncStorage.getItem("userData");
+        if (storedUserData) {
+          setUserData(JSON.parse(storedUserData));
+        }
+      } catch (error) {
+        console.error("Error loading user data:", error);
+      }
+    };
+
+    loadUserData();
+  }, []);
 
   const handleLogout = async () => {
     await logout();
+    // Clear KYC data on logout
+    await AsyncStorage.removeItem("kycVerified");
+    await AsyncStorage.removeItem("userData");
     router.replace("/login");
   };
 
@@ -121,14 +185,29 @@ export default function HomeScreen() {
         end={{ x: 1, y: 1 }}
       >
         <View style={styles.headerContent}>
-          <Avatar.Icon
-            size={60}
-            icon="shield-check"
-            style={styles.avatar}
-            color="#667eea"
-          />
-          <Text style={styles.welcomeText}>Welcome Back!</Text>
+          {userData?.photo ? (
+            <Avatar.Image
+              size={60}
+              source={{ uri: `data:image/jpeg;base64,${userData.photo}` }}
+              style={styles.userAvatar}
+            />
+          ) : (
+            <Avatar.Icon
+              size={60}
+              icon="shield-check"
+              style={styles.avatar}
+              color="#667eea"
+            />
+          )}
+          <Text style={styles.welcomeText}>
+            {userData ? `Welcome, ${userData.name.split(' ')[0]}!` : 'Welcome Back!'}
+          </Text>
           <Text style={styles.appName}>TourGuard360</Text>
+          {userData && (
+            <View style={styles.verifiedBadge}>
+              <Text style={styles.verifiedText}>✓ KYC Verified</Text>
+            </View>
+          )}
         </View>
       </LinearGradient>
 
@@ -140,6 +219,27 @@ export default function HomeScreen() {
             </Text>
           </Card.Content>
         </Card>
+
+        {userData && (
+          <Card style={styles.userInfoCard} elevation={3}>
+            <Card.Content>
+              <Title style={styles.userInfoTitle}>Verified Profile</Title>
+              <Divider style={[styles.dividerStyle, { backgroundColor: "#bbf7d0" }]} />
+              <Text style={styles.userInfoText}>
+                <Text style={{ fontWeight: "600" }}>Name:</Text> {userData.name}
+              </Text>
+              <Text style={styles.userInfoText}>
+                <Text style={{ fontWeight: "600" }}>Date of Birth:</Text> {userData.dob}
+              </Text>
+              <Text style={styles.userInfoText}>
+                <Text style={{ fontWeight: "600" }}>Gender:</Text> {userData.gender === 'M' ? 'Male' : userData.gender === 'F' ? 'Female' : userData.gender}
+              </Text>
+              <Text style={styles.userInfoText}>
+                <Text style={{ fontWeight: "600" }}>Address:</Text> {userData.address}
+              </Text>
+            </Card.Content>
+          </Card>
+        )}
 
         <Card style={styles.featuresCard} elevation={3}>
           <Card.Content>

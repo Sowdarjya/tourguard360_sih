@@ -11,4 +11,13 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+// KYC Verification function
+export const verifyAadhaarXML = async (formData) => {
+  return api.post("http://localhost:3000//verify-aadhaar-xml", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+};
+
 export default api;

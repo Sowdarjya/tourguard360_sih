@@ -35,7 +35,8 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(email, password);
-      router.replace("/");
+      // Redirect to KYC verification instead of homepage
+      router.replace("/kyc");
     } catch (err) {
       alert(
         "Login failed: " +
