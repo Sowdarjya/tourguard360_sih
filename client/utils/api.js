@@ -13,11 +13,21 @@ api.interceptors.request.use(async (config) => {
 
 // KYC Verification function
 export const verifyAadhaarXML = async (formData) => {
-  return api.post("http://localhost:3000//verify-aadhaar-xml", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+  try {
+    // Use the Render deployment URL for KYC verification
+    const KYC_BASE_URL = "https://tourguard360-sih.onrender.com";
+    
+    const response = await axios.create().post(`${KYC_BASE_URL}/verify-aadhaar-xml`, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      timeout: 30000, // 30 second timeout for file upload
+    });
+    return response;
+  } catch (error) {
+    console.error("KYC API Error:", error.response?.data || error.message);
+    throw error;
+  }
 };
 
 export default api;

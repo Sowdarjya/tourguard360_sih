@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -22,6 +22,7 @@ import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import * as DocumentPicker from "expo-document-picker";
 import { verifyAadhaarXML } from "../utils/api";
+import { setKycVerified, getKycStatus } from "../utils/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function KYCScreen() {
@@ -30,17 +31,49 @@ export default function KYCScreen() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  // Check if KYC is already completed
+  useEffect(() => {
+    const checkKycStatus = async () => {
+      const kycStatus = await getKycStatus();
+      if (kycStatus.isVerified) {
+        // KYC already completed, redirect to home
+        Alert.alert(
+          "KYC Already Completed",
+          "Your KYC verification is already completed. Redirecting to home.",
+          [
+            {
+              text: "OK",
+              onPress: () => router.replace("/"),
+            },
+          ],
+          { cancelable: false }
+        );
+      }
+    };
+
+    checkKycStatus();
+  }, []);
+
   const pickDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: "application/zip",
+        type: ["application/zip", "application/x-zip-compressed"],
         copyToCacheDirectory: true,
+        multiple: false,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setSelectedFile(result.assets[0]);
+        const file = result.assets[0];
+        console.log("Selected file:", {
+          name: file.name,
+          size: file.size,
+          mimeType: file.mimeType,
+          uri: file.uri
+        });
+        setSelectedFile(file);
       }
     } catch (error) {
+      console.error("Document picker error:", error);
       Alert.alert("Error", "Failed to pick file. Please try again.");
     }
   };
@@ -59,38 +92,58 @@ export default function KYCScreen() {
     setLoading(true);
     try {
       const formData = new FormData();
-      formData.append("zipFile", {
+      
+      // Create file object for React Native FormData
+      const fileObj = {
         uri: selectedFile.uri,
         type: selectedFile.mimeType || "application/zip",
-        name: selectedFile.name,
+        name: selectedFile.name || "aadhaar.zip",
+      };
+      
+      // Append the file with proper React Native FormData format
+      formData.append("zip_file", fileObj);
+      
+      // Append the share code as string
+      formData.append("share_code", shareCode.toString());
+
+      console.log("Sending FormData with:", {
+        fileName: selectedFile.name,
+        fileSize: selectedFile.size,
+        shareCodeLength: shareCode.length,
+        fileUri: selectedFile.uri,
+        mimeType: selectedFile.mimeType
       });
-      formData.append("shareCode", shareCode);
 
       const response = await verifyAadhaarXML(formData);
       
+      console.log("KYC Response:", response.data);
+      
       if (response.data.status === "verified") {
-        // Store the verified user data
-        await AsyncStorage.setItem("kycVerified", "true");
-        await AsyncStorage.setItem("userData", JSON.stringify(response.data.data));
+        // Store the verified user data using auth function
+        await setKycVerified(response.data.data);
         
         Alert.alert(
           "Verification Successful",
-          `Welcome ${response.data.data.name}! Your KYC has been verified.`,
+          `Welcome ${response.data.data.name}! Your KYC has been verified successfully. This is a one-time process and you won't need to verify again.`,
           [
             {
               text: "Continue",
               onPress: () => router.replace("/"),
             },
-          ]
+          ],
+          { cancelable: false }
         );
       } else {
+        console.error("Verification failed - unexpected response:", response.data);
         Alert.alert("Verification Failed", "Invalid Aadhaar XML or share code");
       }
     } catch (error) {
-      Alert.alert(
-        "Verification Failed",
-        error.response?.data?.error || "Please check your file and share code"
-      );
+      console.error("KYC Verification Error:", error);
+      const errorMessage = error.response?.data?.detail || 
+                          error.response?.data?.error || 
+                          error.message || 
+                          "Please check your file and share code";
+      Alert.alert("Verification Failed", errorMessage);
     } finally {
       setLoading(false);
     }

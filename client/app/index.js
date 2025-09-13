@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { View, StyleSheet, ScrollView } from "react-native";
 import { Card, Title, Text, Button, Divider, Avatar } from "react-native-paper";
-import { logout } from "../utils/auth";
+import { logout, getKycStatus } from "../utils/auth";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const styles = StyleSheet.create({
   container: {
@@ -152,13 +151,15 @@ const styles = StyleSheet.create({
 export default function HomeScreen() {
   const router = useRouter();
   const [userData, setUserData] = useState(null);
+  const [kycVerifiedAt, setKycVerifiedAt] = useState(null);
 
   useEffect(() => {
     const loadUserData = async () => {
       try {
-        const storedUserData = await AsyncStorage.getItem("userData");
-        if (storedUserData) {
-          setUserData(JSON.parse(storedUserData));
+        const kycStatus = await getKycStatus();
+        if (kycStatus.isVerified) {
+          setUserData(kycStatus.userData);
+          setKycVerifiedAt(kycStatus.verifiedAt);
         }
       } catch (error) {
         console.error("Error loading user data:", error);
@@ -169,10 +170,7 @@ export default function HomeScreen() {
   }, []);
 
   const handleLogout = async () => {
-    await logout();
-    // Clear KYC data on logout
-    await AsyncStorage.removeItem("kycVerified");
-    await AsyncStorage.removeItem("userData");
+    await logout(); // This will also clear KYC data
     router.replace("/login");
   };
 
@@ -205,7 +203,9 @@ export default function HomeScreen() {
           <Text style={styles.appName}>TourGuard360</Text>
           {userData && (
             <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedText}>✓ KYC Verified</Text>
+              <Text style={styles.verifiedText}>
+                ✓ KYC Verified {kycVerifiedAt && `on ${new Date(kycVerifiedAt).toLocaleDateString()}`}
+              </Text>
             </View>
           )}
         </View>
