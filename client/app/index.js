@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, ScrollView } from "react-native";
+import { View, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
 import { Card, Title, Text, Button, Divider, Avatar } from "react-native-paper";
-import { logout, getKycStatus } from "../utils/auth";
+import { logout, getKycStatus, getUser } from "../utils/auth";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -152,27 +152,51 @@ export default function HomeScreen() {
   const router = useRouter();
   const [userData, setUserData] = useState(null);
   const [kycVerifiedAt, setKycVerifiedAt] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const loadUserData = async () => {
+    const checkAuthAndLoadData = async () => {
       try {
-        const kycStatus = await getKycStatus();
-        if (kycStatus.isVerified) {
-          setUserData(kycStatus.userData);
-          setKycVerifiedAt(kycStatus.verifiedAt);
+        // Check if user is logged in
+        const user = await getUser();
+        if (!user) {
+          router.replace("/login");
+          return;
         }
+
+        // Check KYC status
+        const kycStatus = await getKycStatus();
+        if (!kycStatus.isVerified) {
+          router.replace("/kyc");
+          return;
+        }
+
+        // User is authenticated and KYC verified, load data
+        setUserData(kycStatus.userData);
+        setKycVerifiedAt(kycStatus.verifiedAt);
       } catch (error) {
         console.error("Error loading user data:", error);
+        router.replace("/login");
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    loadUserData();
+    checkAuthAndLoadData();
   }, []);
 
   const handleLogout = async () => {
     await logout(); // This will also clear KYC data
     router.replace("/login");
   };
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#667eea" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
