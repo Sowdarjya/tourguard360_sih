@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 
 const Map = dynamic(() => import("./MapEditor"), { ssr: false });
 

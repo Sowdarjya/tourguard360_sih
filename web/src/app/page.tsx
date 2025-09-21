@@ -1,4 +1,5 @@
 import { Shield, WifiOff, Users, Map, Cpu, Bot, GitBranch, KeyRound, Sun, CloudDrizzle, Languages, Building2 } from 'lucide-react';
+import Link from 'next/link';
 
 // Main component for the project page
 export default function TourGuard360Page() {
@@ -56,12 +57,12 @@ export default function TourGuard360Page() {
         
         {/* Live Demo Button */}
         <div className="text-center mb-16">
-          <a
-            href="http://localhost:3500/admin"
+          <Link
+            href="/admin"
             className="bg-cyan-800 text-white font-bold py-3 px-8 rounded-full hover:bg-blue-600 transition-all duration-300 text-lg shadow-lg hover:shadow-green-500/50"
           >
             Go to Admin Panel
-          </a>
+          </Link>
         </div>
 
         {/* Overview Section */}
@@ -149,3 +150,4 @@ export default function TourGuard360Page() {
   );
 }
 
+//jhave ro ad relakme syc cs.
